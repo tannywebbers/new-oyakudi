@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pc_btn_muted_bg">#d1d5db</color>
+    <color name="pc_card_grad_end">#fce404</color>
+    <color name="pc_card_grad_start">#fff176</color>
+    <color name="pc_card_yellow">#fce404</color>
+    <color name="pc_credit_amount_due">#3e5c0d</color>
+    <color name="pc_danger">#f04438</color>
+    <color name="pc_divider">#e5e7eb</color>
+    <color name="pc_field_bg">#f7f7f8</color>
+    <color name="pc_primary">#c7f24c</color>
+    <color name="pc_primary_soft">#f0fad9</color>
+    <color name="pc_profile_well_about">#eef1f8</color>
+    <color name="pc_profile_well_feedback">#fff6df</color>
+    <color name="pc_profile_well_help">#e9f8ef</color>
+    <color name="pc_profile_well_ledger">#eaf5d6</color>
+    <color name="pc_profile_well_legal">#f0f4ff</color>
+    <color name="pc_tab_active_icon">#0f172a</color>
+    <color name="pc_tab_active_text">#0f172a</color>
+    <color name="pc_tab_inactive">#64748b</color>
+    <color name="pc_tab_ring">#f0fad9</color>
+    <color name="pc_text_hint">#999999</color>
+    <color name="pc_text_main">#0f172a</color>
+    <color name="pc_text_muted">#6b7280</color>
+    <color name="lime">#b8e63a</color>
+</resources>
+
