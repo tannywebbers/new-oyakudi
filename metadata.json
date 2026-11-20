@@ -1,0 +1,7 @@
+{
+  "name": "PixKudi",
+  "description": "A modern, reliable financial and credit management Android app.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

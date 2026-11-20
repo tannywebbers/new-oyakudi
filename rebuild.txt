@@ -1,0 +1,663 @@
+================================================================================
+REBUILD PROMPT — "Decompiled APK -> Branded, Function-Complete Android App"
+Reusable blueprint for converting ANY decompiled APK into a new Android app that
+keeps the decompiled app's original theme/layouts, adopts the decompiled app's
+app name + package + (bumped) version, and implements the full SapaClear + PixKudi
+feature/function set (login/OTP/app-name gate, announcements modal, news ticker,
+withdraw + ledger, and the repayment + payment-webhook flow).
+================================================================================
+
+HOW TO USE THIS FILE
+--------------------
+This file is a prompt/blueprint. Copy everything below the line marked
+"=== BEGIN PROMPT ===" into your AI coding agent (e.g. opencode, Claude Code,
+Cursor, Gemini), then give it the 3 inputs described in Section 0.
+
+The working, already-completed reference implementation of this exact process is
+the project at:
+
+       C:\Users\DELL\Documents\vs-code\modify-apps\new-pixkudi
+
+Use that folder as the "gold standard" example for structure, file names,
+theme-token conventions, the data layer, the login flow, the announcement
+popup, and the news ticker. REPLICATE its approach, do not reinvent it.
+
+--------------------------------------------------------------------------------
+PLACEHOLDERS (replace before sending)
+--------------------------------------------------------------------------------
+<APPNAME>          Human brand name of the NEW app, e.g. "PixKudi".
+<APPNAME_LOWER>    Lowercase token used for matching, e.g. "pixkudi".
+<DECOMPILED_DIR>   Folder containing the apktool-decompiled APK (smali + res).
+<NEW_PROJECT_DIR>  Where the new Kotlin/Compose project will be created.
+                   Reference example: C:\Users\DELL\Documents\vs-code\modify-apps\new-pixkudi
+
+--------------------------------------------------------------------------------
+CURRENT REFERENCE IMPLEMENTATION (new-pixkudi) — concrete values to mirror
+--------------------------------------------------------------------------------
+The completed reference app demonstrates the latest feature set AND the
+decompiled-derived identity. Use these exact values when rebuilding PixKudi:
+
+  App name (brand/label):     PixKudi
+  applicationId (package):    app.pixkudi.service.ng   (taken from the decompiled
+                              apk's AndroidManifest.xml android:package="...")
+  Kotlin source namespace:    com.example              (unchanged; only the
+                              installed applicationId is the package name)
+  versionName / versionCode:  1.0.4 / 7                (the decompiled apk was
+                              1.0.2 / 5 per apktool.yml versionInfo -> the
+                              rebuilt app was bumped +1 to 1.0.3 / 6, then
+                              bumped again on the next change; see rule 1.10)
+  Release artifact:           release/PixKudi-release.apk  (built with
+                              :app:assembleDebug, copied into release/, and
+                              committed to git; release/ is intentionally NOT
+                              gitignored)
+  Payment webhook:            Supabase Edge Function "payment-webhook" (open,
+                              no auth header sent)
+  Repayment virtual account:  palmPay / 6695205990 / Nwaobi Uche (EMPATHY DESK LTD)
+
+When rebuilding for a DIFFERENT decompiled APK, read that APK's own
+AndroidManifest.xml (package, label) and apktool.yml (versionInfo), then apply
+the same mapping 1:1 (see rule 1.9).
+
+
+=== BEGIN PROMPT ===
+
+================================================================================
+0. MISSION, INPUTS, AND REFERENCE PROJECTS
+================================================================================
+
+MISSION
+You are a senior Android engineer. You will build a brand-new, production-quality
+Android app (Kotlin + Jetpack Compose + MVVM + Coroutines/Flow) named <APPNAME>.
+
+The new app MUST combine two things:
+  (A) THE VISUAL DESIGN of the decompiled APK at <DECOMPILED_DIR> — i.e. keep
+      that app's ORIGINAL theme, colors, typography, drawables/icons, component
+      styling, layouts and screen structure. This is the "look and feel" source
+      of truth. Do NOT swap in a generic Material look.
+  (B) THE FUNCTIONS AND FEATURES developed for SapaClear and PixKudi — the phone
+      login, Supabase data fetching, OTP auto-generation, app-name gate,
+      announcement popup modal, news ticker, withdraw/ledger, and the repayment
+      + payment-webhook flow. This is the "behavior" source of truth and stays
+      consistent across every app built with this blueprint.
+
+  (C) THE IDENTITY of the decompiled APK — its app name/label, its package name
+      (applicationId) and a version bumped by +1 from the decompiled version.
+      See rule 1.9.
+
+So: NEW app = decompiled app's original visuals  +  PixKudi/SapaClear functions.
+
+REFERENCE PROJECTS ON THE PC (read these, mirror their patterns):
+  1. Completed merged reference (STRUCTURE + FEATURE GOLD STANDARD):
+    C:\Users\DELL\Documents\vs-code\modify-apps\new-pixkudi
+     This is the SapaClear data layer + PixKudi theming, fully wired. Copy its
+     architecture, package layout, repository/provider pattern, and UI patterns.
+
+  2. Functionality source (the data layer, login, repositories, Room, Supabase):
+       C:\Users\DELL\Documents\SapaClear-main\SapaClear-main
+     Kotlin + Compose. Provides: LoginScreen, AuthViewModel, UserRepository,
+     CustomerRepository, SupabaseClient/SupabaseConfig, Room (AppDatabase,
+     UserSessionDao, CustomerDao, TransactionDao), navigation, and all feature
+     screens. This is the FUNCTION reference — reuse it almost verbatim, only
+     re-branding strings/colors.
+
+  3. Database + web backend reference (schema, brand settings, announcements):
+       C:\Users\DELL\Documents\vs-code\empathydesks\empathydesk1-main
+     Node/React + Supabase. Provides: db/schema.sql (public.customers,
+     public.brand_settings, public.loan_platforms, etc.), the announcement
+     columns (news_ticker_enabled, news_ticker_text, popup_modal_enabled,
+     popup_modal_html), and docs/native-app-realtime-prompt.md.
+
+  4. Decompiled APK workspace (this app's visual source of truth):
+       <DECOMPILED_DIR>          (e.g. ...\pixkudi\pixkudi_decoded\ with
+                                  res/layout/*.xml, res/values/colors.xml,
+                                  res/values/styles.xml, res/values/strings.xml,
+                                  res/drawable/*, AndroidManifest.xml, smali/)
+       <DECOMPILED_DIR>\..\*_java  (jadx Java output — REFERENCE ONLY, never build)
+
+INPUTS YOU MUST BE GIVEN (ask if missing):
+  - <APPNAME> and <APPNAME_LOWER>
+  - <DECOMPILED_DIR>
+  - <NEW_PROJECT_DIR>
+  - Supabase project URL + key (defaults in Section 4 if not provided)
+
+
+================================================================================
+1. NON-NEGOTIABLE RULES
+================================================================================
+
+1.1 The new app's VISUALS come from the decompiled APK. Extract its theme tokens
+    and component styling and reproduce them faithfully. The decompiled app is
+    XML-View based; you are rebuilding the SAME design in Jetpack Compose.
+    Match colors, corner radii, spacing, fonts, gradients, icons, and screen
+    composition as closely as possible.
+
+1.2 The new app's FUNCTIONS come from SapaClear/PixKudi. Keep the data layer
+    (Supabase + Room + repositories + view models) behavior identical. Do not
+    change network paths, table names, or login semantics.
+
+1.3 The decompiled APK is NOT buildable as Java. Treat:
+      - apktool output (smali + res)  -> authoritative for resources/layouts.
+      - jadx output (Java)            -> readable reference only; may not compile.
+    You are WRITING a fresh Kotlin/Compose project, not rebuilding smali.
+
+1.4 Do NOT use a generic Material palette for branding. Use the decompiled
+    app's palette (mapped to semantic names: primary, primarySoft, accent,
+    textMain, textMuted, textHint, divider, fieldBg, card gradients, tab
+    active/inactive, status/danger, and well/panel tints). Keep raw hex values
+    from the decompiled app.
+
+1.5 Preserve the exact resource IDENTIFIERS from the decompiled app where you
+    port resources manually (drawables, string names). WARNING: when doing
+    project-wide string replacement, PowerShell -replace is CASE-INSENSITIVE
+    and will corrupt lowercase resource names (e.g. img_appname_logo ->
+    img_AppName_logo, which is invalid). Use case-sensitive replacement only.
+
+1.6 Never print or commit secrets. The Supabase key here is a publishable/anon
+    key (safe for clients); do not add a service-role key to the app.
+
+1.7 Do NOT build the APK or run smoke tests unless explicitly asked. When asked,
+    follow the toolchain in Section 6.
+
+1.8 Keep <NEW_PROJECT_DIR> clean: exclude .gradle/, build/, .git/, *.apk from any
+    copy operations.
+
+1.9 APP NAME + PACKAGE + VERSION come from the DECOMPILED APK (never invented):
+      - App name / label: use the decompiled app's user-facing brand as <APPNAME>
+        (from AndroidManifest.xml android:label and res/values strings). Set the
+        new project's res/values app_name to that same name.
+      - applicationId (the INSTALLED package name): copy the decompiled apk's
+        AndroidManifest.xml android:package attribute verbatim
+        (for PixKudi that is "app.pixkudi.service.ng"). Do NOT leave a
+        placeholder id like "com.example" as the applicationId.
+      - versionCode / versionName: read them from the decompiled apktool.yml
+        "versionInfo:" block, then BUMP by one step so the rebuilt APK installs
+        as an update over the original
+        (PixKudi decompiled: versionCode 5 / versionName 1.0.2  ->  rebuilt:
+        versionCode 6 / versionName 1.0.3).
+      - The Kotlin source `namespace` (e.g. "com.example") is just the source
+        package; only `applicationId` determines the on-device/Play package name.
+        Leave the namespace alone (renaming it would need a full source refactor).
+
+1.10 EVERY CHANGE BUMPS THE VERSION. Whenever you modify the app in any way
+     (bug fix, UI tweak, feature, string/asset change), increment BOTH the
+     versionCode (+1) and versionName (patch +1, e.g. 1.0.3 -> 1.0.4) in
+     app/build.gradle.kts BEFORE building, so the new APK always installs as an
+     update over the previous one. Keep the user-facing version in sync too:
+     res/values/pixkudi_strings.xml <string name="company_version"> and the
+     CompanyInfo.version default in data/model/AppConfig.kt (e.g. "Version
+     1.0.4" / "1.0.4"). Never ship two different APKs with the same version.
+
+
+================================================================================
+2. FEATURE / FUNCTION SET TO IMPLEMENT (SapaClear + PixKudi)
+================================================================================
+
+Implement ALL of the following in <NEW_PROJECT_DIR>. This is the standard feature
+set for every app produced by this blueprint.
+
+2.1 Splash screen (branded with decompiled app's logo/colors).
+2.2 Phone-number-only login:
+      - Country code prefix (default +234) + phone field.
+      - "Next" moves to the OTP step.
+      - Strictly verifies the customer against the live Supabase `customers`
+        table by phone number (see Section 4.2).
+2.3 OTP step with AUTO-GENERATED CODE:
+      - On entering the OTP step, after a 5 second delay, auto-generate a random
+        4-digit code and insert it into the 4 code boxes.
+      - The code is NOT validated against any server; any 4 digits proceed.
+      - Provide an "edit phone" affordance to go back.
+      - A confirm/login button (enabled when 4 digits are present) advances to the
+        dashboard/home.
+2.4 APP-NAME (platform) GATE at login:
+      - The fetched customer record has a `loan_platform` field.
+      - If `loan_platform` (trimmed, case-insensitive) does NOT equal
+        <APPNAME>, REFUSE the login and do NOT advance. Show a clear error
+        ("This phone number is not registered on <APPNAME>."). Clear any session
+        and cached customer data.
+      - This gate also applies on silent session-restore at app start.
+2.5 Dashboard/Home:
+      - Greeting + customer name.
+      - Credit card panel (uses decompiled app's card styling/gradient).
+      - Available credit amount + "withdraw/payout" CTA.
+      - NEWS TICKER directly UNDER the credit card (Section 5.3).
+      - Quick-action tiles (ledger/statement, contact/support, feedback, etc.).
+2.6 Profile / Mine screen (customer info, logout, delete account, links to
+    About / Help / Feedback / Contact / Privacy).
+2.7 Credit statement / ledger + used-credit history.
+2.8 Withdraw / loan application flow (amount, terms, confirm) with cooldown and
+    status handling (approved / pending / failed / declined / suspended).
+2.9 About Us, Help Center (FAQs), Feedback, Contact Us, Privacy Policy screens.
+2.10 Session persistence in Room (survives restarts); logout clears session.
+2.11 ANNOUNCEMENT POPUP MODAL (Section 5.2): HTML content from the database,
+     shown on app open, throttled to once per hour.
+2.12 NEWS TICKER (Section 5.3): scrolling marquee text from the database.
+2.13 REPAYMENT ("Repay Now" -> Payment Method modal -> payment webhook, Section
+     5.5). Latest feature added to the reference build:
+       - A "Repay Now" action on the DEBT/SUMMARY row of the credit-statement
+         (ledger) screen opens a "Payment Method" modal.
+       - Modal shows the exact amount to pay (large), the loan amount, a virtual
+         account block (bank / account number / account holder) with a working
+         COPY button (ClipboardManager + toast), a security notice, and a
+         full-width green "Paid — Refresh status" button.
+       - Tapping "Paid" POSTs a JSON payload to the open Supabase Edge Function
+         "payment-webhook" (no auth header). Button states:
+           IDLE -> LOADING -> SUCCESS (toast "Your repayment would be confirmed
+           soon." then auto-dismiss) / ERROR ("Failed. Try again").
+
+Feature screens must visually match the decompiled app's corresponding screens
+where they exist; where the decompiled app lacks a screen, style the new screen
+with the decompiled app's theme tokens so it looks native to the app.
+
+
+================================================================================
+3. VISUAL EXTRACTION FROM THE DECOMPILED APP (DO THIS FIRST)
+================================================================================
+
+3.1 Inventory the decompiled resources:
+      res/layout/*.xml           -> screen, pane, row, view, dialog layouts
+      res/values/colors.xml      -> palette
+      res/values/styles.xml      -> component/theme styles
+      res/values/themes.xml      -> app theme
+      res/values/strings.xml     -> user-facing copy
+      res/values/dimens.xml      -> spacing/sizes
+      res/drawable/ + res/drawable-*/ + res/mipmap-*/ -> icons, logos, shapes
+      res/font/                  -> custom fonts
+      AndroidManifest.xml        -> package name, app label, permissions, activity
+
+3.2 Create a THEME TOKEN MAP in the new project (Kotlin) named semantically,
+    e.g. in ui/theme/Color.kt:
+      BrandPrimary, BrandPrimarySoft, BrandAccent, BrandTextMain, BrandTextMuted,
+      BrandTextHint, BrandDivider, BrandFieldBg, BrandDanger, BrandCardGradientStart,
+      BrandCardGradientEnd, BrandTabActive, BrandTabInactive, BrandWell1..BrandWellN.
+    Keep a legacy alias block if helpful so older code compiles.
+
+3.3 Port the drawables needed by the app (logos, icons, card art) into the new
+    project's res/drawable, preserving names. Remove library icons you do not
+    need (material/plumbing icons) to keep the Res build clean.
+
+3.4 Port the user-facing strings into the new project's res/values. Re-brand the
+    app name to <APPNAME> (app_name string and any hardcoded brand text).
+
+3.5 Map the decompiled app's screens to the feature set (Section 2). For each
+    feature screen, mirror the decompiled layout's composition first, then apply
+    the theme tokens.
+
+3.6 Reference example: in new-pixkudi, ui/theme/Color.kt holds the PixKudi
+    palette derived from pixkudi_decoded/res/values/colors.xml (primary #c7f24c,
+    card yellow #fce404, grad start #fff176, textMain #0f172a, textMuted #6b7280,
+    textHint #999999, divider #e5e7eb, fieldBg #f7f7f8, danger #f04438, etc.).
+    Reproduce this mapping approach for <DECOMPILED_DIR>.
+
+
+================================================================================
+4. DATA CONTRACTS (SUPABASE + ROOM)
+================================================================================
+
+4.1 Supabase client
+    Use Retrofit + Moshi + OkHttp against Supabase PostgREST, exactly like
+    new-pixkudi/data/supabase/SupabaseConfig.kt and SupabaseClient.kt:
+      - Headers on every call: apikey: <ANON_KEY>, Authorization: Bearer <ANON_KEY>,
+        Content-Type: application/json.
+      - Store URL/key in SharedPreferences, with sane defaults.
+    Defaults (unless the user supplies their own):
+      URL: https://gcglkblilfsonhufigvr.supabase.co
+      ANON/PUBLISHABLE KEY: sb_publishable_rD2CVlH7gCNzxXmRPCLFzw_y_IOB7yr
+
+4.2 public.customers (login + case data)
+    Endpoint: GET rest/v1/customers?select=*&phone_number=eq.<value>  (with
+    fallback suffix matching).
+    Key columns: id, owner_id, customer_name, phone_number, reference_number,
+      reference_id, loan_platform, platform_logo_url, avatar_url,
+      current_credit_limit, requested_credit_limit, outstanding_loan_balance,
+      loan_duration, loan_tenor_months, interest_rate, monthly_repayment,
+      next_loan_eligible_amount, request_type, status, loan_app_status,
+      loan_app_status_reason, retry_available_at, discount_*, contract_amount,
+      overdue_charges, penalty_fees, interest_charges, collector_notes,
+      expires_at, approved_at, declined_at, created_at, updated_at, share_token.
+    login_platform gate: customers.loan_platform must equal <APPNAME>.
+
+4.3 public.brand_settings (announcements)
+    Endpoint: GET rest/v1/brand_settings?select=news_ticker_enabled,
+              news_ticker_text,popup_modal_enabled,popup_modal_html&limit=1
+    (Optionally filter platform_name=eq.<APPNAME> if a row is per-app.)
+    Columns: news_ticker_enabled (bool), news_ticker_text (text),
+             popup_modal_enabled (bool), popup_modal_html (text),
+             platform_name (text), plus branding fields.
+
+4.4 ROOM (offline cache)
+    Mirror new-pixkudi: AppDatabase with CustomerDao, TransactionDao,
+    UserSessionDao, CooldownDao. Cache the last customer/case; restore sessions.
+
+4.5 IMPORTANT — anon read access (RLS):
+    brand_settings is protected by an owner-only policy by default, so an
+    anonymous client gets an EMPTY result. For the popup/ticker to work you MUST
+    add a public read policy (run in Supabase SQL editor; do not do this from the
+    app):
+        alter table public.brand_settings enable row level security;
+        create policy "brand_settings_public_app_read"
+          on public.brand_settings for select to anon using (true);
+    Document this requirement in the project README and in your final report.
+    (customers already supports anon select via the share-token policy.)
+
+
+================================================================================
+5. KEY IMPLEMENTATION SPECS (behaviour details)
+================================================================================
+
+5.1 LOGIN + OTP + APP-NAME GATE
+    Flow:
+      PhoneStep -> (Next) -> OtpStep -> (auto-fill after 5s) -> confirm -> Home.
+    - AuthViewModel: onPhoneNumberChanged (digits, max 11), onAgreeToggled,
+      loginOrRegister(onSuccess), clearMessages. Normalize to +234XXXXXXXXXX.
+    - Change detection: the confirm path calls userRepository.loginOrRegister()
+      which calls customerRepository.loginWithPhone() which queries Supabase.
+    - APP-NAME GATE lives in customerRepository.loginWithPhone(): after mapping
+      the DTO to the domain model, if
+          !customerCase.loanPlatform.trim().equals(<APPNAME>, ignoreCase = true)
+      then return Result.failure("This phone number is not registered on <APPNAME>.")
+      BEFORE clearing/saving local data. This also guards session restore.
+    - OTP AUTO-GEN in the OTP composable:
+        LaunchedEffect(step) { if (step == 1) { delay(5000);
+          otp = Random.nextInt(0, 10000).toString().padStart(4, '0') } }
+      The OTP boxes display `otp`; the confirm button enables when otp.length == 4.
+    - On wrong platform: show the error inline, stay on the OTP/login screen, do
+      not navigate.
+
+5.2 ANNOUNCEMENT POPUP MODAL (once per hour)
+    - Data: Announcement(newsTickerEnabled, newsTickerText, popupModalEnabled,
+      popupModalHtml) fetched from brand_settings.
+    - Show when: popupModalEnabled == true AND popupModalHtml is not blank AND
+      the throttle allows it.
+    - Throttle: store "last shown at" epoch millis in SharedPreferences
+      (e.g. prefs "announcement_prefs", key "popup_last_shown_at", interval
+      60*60*1000 ms). On first ever load it shows; afterwards only if
+      now - lastShown >= 1 hour.
+    - When shown, mark the timestamp (on dismiss).
+    - Trigger point: the authenticated host screen (e.g. MainHostScreen) fires
+      LaunchedEffect(Unit) -> mainViewModel.loadAnnouncementAndMaybeShowPopup().
+      This runs each time the app opens / host screen is (re)created.
+    - UI: a Compose Dialog titled "Announcement", with the HTML rendered inside an
+      android.webkit.WebView via AndroidView (loadDataWithBaseURL, JavaScript
+      disabled, transparent background, wrapped with a small responsive CSS
+      <style> for readable body text and max-width images). A single full-width
+      "Okay" button dismisses it. Style header/button with brand theme tokens.
+    - Reference: new-pixkudi .../ui/components/AnnouncementPopup.kt and
+      data/repository/AnnouncementRepository.kt.
+
+5.3 NEWS TICKER (marquee under the credit card)
+    - Text comes from brand_settings.news_ticker_text; render only if
+      newsTickerEnabled is true AND text is not blank.
+    - Placement: directly under the credit-card panel and above the next panel on
+      the Home/dashboard screen.
+    - Implementation: an auto-scrolling marquee composable:
+        * measure text width with rememberTextMeasurer (softWrap=false, maxLines=1),
+        * measure container width with onSizeChanged,
+        * animate a float 0..1 with rememberInfiniteTransition +
+          infiniteRepeatable(tween(~16000ms, LinearEasing), Restart),
+        * offset text by (containerWidth - progress * (containerWidth + textWidth))
+          using Modifier.offset { IntOffset(x, 0) } and
+          Modifier.wrapContentWidth(unbounded = true) so it is not clipped,
+        * put it in a clipped Box with a brand background + brand text color.
+    - Style with BRAND THEME TOKENS (no hardcoded colors). Reference:
+      new-pixkudi .../ui/components/NewsTicker.kt (uses BrandPrimarySoft bg +
+      BrandTextMain text).
+
+5.4 STATE WIRING (repository -> viewmodel -> compose)
+    - Add AnnouncementRepository to the global RepositoryProvider.
+    - MainViewModel exposes: announcement: StateFlow<Announcement>,
+      showAnnouncementPopup: StateFlow<Boolean>,
+      announcementPopupHtml: StateFlow<String>; plus
+      loadAnnouncementAndMaybeShowPopup() and dismissAnnouncementPopup().
+    - HomeScreen collects `announcement` for the ticker; MainHostScreen collects
+      the popup state and renders AnnouncementPopup.
+
+5.5 REPAYMENT MODAL + PAYMENT WEBHOOK (latest feature)
+    - Data model (single source of truth, keep in one file, e.g.
+      data/model/Repayment.kt):
+        object VirtualRepaymentAccount {
+          const val BANK = "palmPay"
+          const val ACCOUNT_NUMBER = "6695205990"
+          const val ACCOUNT_HOLDER = "Nwaobi Uche (EMPATHY DESK LTD)"
+        }
+        enum class RepaymentStatus { IDLE, LOADING, SUCCESS, ERROR }
+    - RepaymentModal composable (ui/components/RepaymentModal.kt): a bottom-sheet
+      style Dialog (usePlatformDefaultWidth = false) with a dimmed scrim, an
+      animated rounded white Surface card, a leading-row close "x", centered
+      title "Payment Method", the amount-to-pay shown large in brand blue, a
+      "Total amount to be paid" caption, a loan-amount row on a soft grey pill,
+      then a 2dp-bordered virtual-account card (title "Account Number",
+      subtitle "Transfer to virtual account", labeled BANK / ACCOUNT NUMBER /
+      ACCOUNT HOLDER NAME) with a COPY pill button that writes to the clipboard
+      via ClipboardManager and shows a toast + "COPIED!" for 2s, a small security
+      notice line, and a full-width action button whose color/label depend on
+      status (green idle -> green disabled while loading -> success/failed).
+      Use testTags: repayment_modal, repayment_close, repayment_copy,
+      repayment_paid_button.
+    - RepaymentRepository (data/repository/RepaymentRepository.kt): POST a JSON
+      body to the open Edge Function with OkHttp (enqueue + suspendCancellable
+      coroutine, 15s connect/read/write timeouts), return Result<Boolean>
+      (success only on 2xx), never throw. Payload field names are FIXED:
+        event, customerName, amount (Long NUMBER, not string), customerId,
+        loanId, bank, accountNumber, accountHolder, timestamp (UTC ISO-8601)
+      Endpoint (PixKudi reference):
+        https://gcglkblilfsonhufigvr.supabase.co/functions/v1/payment-webhook
+      event value = "repayment_marked_paid"; no Authorization header is sent.
+    - MainViewModel wiring: expose showRepaymentModal: StateFlow<Boolean> and
+      repaymentStatus: StateFlow<RepaymentStatus>; add openRepaymentModal()
+      (reset to IDLE + show), dismissRepaymentModal() (hide + reset), and
+      submitRepayment() (guard against double-submit, set LOADING, build the
+      payload from the current customer, post, then set SUCCESS/ERROR).
+      Register RepaymentRepository in RepositoryProvider.
+    - CreditStatementScreen: show the "Repay Now" button only on the debt/
+      summary ledger row; LaunchedEffect(repaymentStatus) on SUCCESS shows the
+      confirmation toast ("Your repayment would be confirmed soon.") and calls
+      dismissRepaymentModal(); on ERROR leave the modal open with the retry
+      label.
+    - Strings live in res/values/pixkudi_strings.xml (repayment_* keys).
+
+5.6 VIRTUAL CREDIT CARD (random, persisted locally)
+    - The card number shown on Home must NOT be a hardcoded constant. Generate a
+      RANDOM 16-digit number that ALWAYS STARTS WITH "6623", and PERSIST it in
+      local storage so it stays stable across launches.
+    - Reference: new-pixkudi .../data/local/CardStorage.kt:
+        * SecureRandom for the remaining 12 digits; format the 16 digits in
+          groups of 4 for display (e.g. "6623 1234 5678 9012").
+        * SharedPreferences name "pixkudi_virtual_card_storage", key
+          "virtual_card_number"; getOrCreateCardNumber() creates once, then
+          getCardNumberForDisplay() re-reads it.
+        * A SINGLE device-level card (fixed key, not per-customer) — this avoids
+          Room schema/migration risk.
+    - Wiring: RepositoryProvider builds a CardStorage and passes it into
+      CreditRepositoryImpl; both the creditInfo flow and getCreditInfo() use
+      cardStorage.getCardNumberForDisplay(). CardInfo.cardNumber default should
+      be the 6623 placeholder ("6623 0000 0000 0000").
+    - Expiry: getCurrentDateFormatted() (today). Card status pill styling stays
+      as in the decompiled app (active/inactive backgrounds).
+    - IMPORTANT: keep ALL decompiled Home and Withdraw UI intact — change only
+      the data source (the number), never the layout/composition.
+
+5.7 WITHDRAW: ONCE-PER-DAY LIMIT + SAPACLEAR-STYLE CONFIRMATION
+    - Rename the cooldown check to checkWithdrawCooldown (CustomerRepository
+      interface + impl + MainViewModel call site).
+    - submitLoanApplication: insert a 24-hour cooldown BEFORE evaluating the loan
+      status, so EVERY outcome blocks a second withdrawal the same day. Reason
+      "Daily withdrawal limit"; retry date = getFutureFormattedDate(1).
+    - CooldownBlocked.daysRemaining -> hoursRemaining; FailedOrSuspended uses
+      daysRemaining = 1 with retry default getFutureFormattedDate(1).
+    - Dialog copy: title "Daily Withdrawal Limit Reached"; failed/suspended
+      message states only one withdrawal is allowed per day.
+    - Confirmation screen: SapaClear-style annotated terms paragraph
+      (buildAnnotatedString + withStyle + SpanStyle), e.g. "You will receive ₦X
+      ... repay ₦Y in N days by DATE" — no extra dialog.
+
+5.8 FINANCIAL MATH, SUPPORT CONTACTS, STATUS BAR (PixKudi defaults)
+    - Interest/tenor MUST match the correct money math (0.08 daily rate, 180-day
+      tenor), NOT the mojibaked/decompiled 18.0 / 14:
+        * CustomerCase.interestRate default 0.08; loanDuration default "180";
+          durationDays fallback 180.
+        * SupabaseConfig DTO interestRate default + fallback 0.08; loanDuration
+          default + fallback "180".
+        * MainViewModel.calculateRepaymentAmount(amount, periodDays = 180,
+          dailyRate = 0.08).
+    - WithdrawScreen shows a Repayment date SummaryRow (today + durationDays).
+    - Credit statement debt/summary row repaymentDate = getCurrentDateFormatted().
+    - Support contacts (from the decompiled app): email support@PixKudi.app and
+      phone/WhatsApp +234 9136275122 — set in pixkudi_strings.xml
+      (support_email_value, support_call_value, support_whatsapp_value),
+      AppConfigRepository.kt (email + FAQ + privacy), and AppConfig.kt
+      (CompanyInfo.email).
+    - Currency/encoding: use the real "₦" (U+20A6), "©", "—", "–". The decompiled
+      sources are mojibake-corrupted ("â‚¦" etc.); fix these across Credit.kt,
+      CustomerCase.kt, CreditRepository.kt, pixkudi_strings.xml.
+    - Status bar: MainActivity enableEdgeToEdge with
+      SystemBarStyle.light(TRANSPARENT, TRANSPARENT); themes.xml add
+      android:windowLightStatusBar=true and android:statusBarColor transparent.
+
+
+================================================================================
+6. PROJECT SETUP + BUILD TOOLCHAIN (Windows)
+================================================================================
+
+6.1 Create <NEW_PROJECT_DIR> as a Gradle Android project (Kotlin + Compose, MVVM).
+    The fastest reliable path used previously: copy the SapaClear project and
+    re-skin it. Example:
+        robocopy "C:\Users\DELL\Documents\SapaClear-main\SapaClear-main" ^
+                 "<NEW_PROJECT_DIR>" /E /XD .gradle build .git /XF *.apk
+    Then replace theme tokens, resources, strings, and screen compositions.
+
+6.2 local.properties:
+        sdk.dir=C:/Users/DELL/AppData/Local/Android/Sdk
+
+6.3 Dev signing: copy the debug keystore:
+        copy "%USERPROFILE%\.android\debug.keystore" "<NEW_PROJECT_DIR>\debug.keystore"
+
+6.4 Toolchain facts (no usable gradlew wrapper on this PC):
+      - Gradle binary:
+        C:\Users\DELL\.gradle\wrapper\dists\gradle-9.3.1-bin\
+        9qcfqgkpv4jj7dpq7f6mvpiez\gradle-9.3.1\bin\gradle.bat
+      - JAVA_HOME: C:\Program Files\Android\Android Studio\jbr
+      - Android SDK: C:\Users\DELL\AppData\Local\Android\Sdk
+        (platforms android-35/36, build-tools 36.0.0)
+      - gradlew.bat is unusable (services.gradle.org download times out); always
+        invoke the extracted gradle.bat instead.
+      - Maven (dl.google.com) is reachable; some artifacts (e.g. material) may not
+        be cached — prefer what is already cached (AGP 9.1.1, appcompat, Compose).
+
+6.5 Build commands (ONLY when explicitly asked to build):
+        gradle.bat :app:compileDebugKotlin --no-daemon --console=plain
+        gradle.bat :app:assembleDebug    --no-daemon --console=plain
+      APK output: <NEW_PROJECT_DIR>\app\build\outputs\apk\debug\app-debug.apk
+
+6.5.1 RELEASE ARTIFACT: after a successful build, copy the freshly built APK to
+      <NEW_PROJECT_DIR>\release\<APPNAME>-release.apk (overwrite) and COMMIT it.
+      The .gitignore must NOT exclude it (the repo intentionally tracks the
+      release APK; note that "*.apk" is fine to ignore globally as long as the
+      release/ copy is committed/negated, e.g. add "!release/*.apk").
+      Verify the built identity matches rule 1.9:
+        aapt2 dump badging release\<APPNAME>-release.apk | findstr package
+      Expected for PixKudi:
+        package: name='app.pixkudi.service.ng' versionCode='7' versionName='1.0.4'
+        application-label:'PixKudi'
+
+6.6 Connected device (when testing): usually a Galaxy S21 (SM-G996U) over
+    wireless adb (serial like 10.42.235.4:34481). Install with:
+        adb install -r "<...>\app-debug.apk"
+
+
+================================================================================
+7. PHASED EXECUTION PLAN (follow in order; report progress per phase)
+================================================================================
+
+PHASE 0  Recon
+  - Read the three reference projects and the decompiled APK resources.
+  - Produce: palette map, screen inventory, resource inventory, feature-to-screen
+    mapping. Ask the user only if a required input is missing.
+
+PHASE 1  Scaffold
+  - Create <NEW_PROJECT_DIR> (copy SapaClear, clean .gradle/build/.git/*.apk).
+  - Configure local.properties + debug.keystore.
+  - Apply rule 1.9: set app_name/<APPNAME> from the decompiled app, set
+    applicationId = the decompiled apk's android:package, and set versionCode/
+    versionName = decompiled apktool.yml values bumped +1.
+
+PHASE 2  Theme + resources
+  - Port palette -> semantic tokens in ui/theme/Color.kt (+ Theme.kt light scheme,
+    onPrimary, etc.).
+  - Port drawables, fonts, strings; re-brand to <APPNAME>.
+
+PHASE 3  Components + screens
+  - Re-skin shared components (buttons, cards, bottom bar) with tokens.
+  - Rebuild every feature screen to mirror the decompiled app's composition.
+
+PHASE 4  Data layer + login
+  - Wire Supabase + Room + repositories + RepositoryProvider (mirror new-pixkudi).
+  - Implement login, OTP auto-gen, and the app-name gate.
+
+PHASE 5  Announcements
+  - Add brand_settings DTO + query, Announcement model, AnnouncementRepository
+    (with 1-hour throttle), MainViewModel wiring.
+  - Add AnnouncementPopup (WebView + Okay) on the host screen.
+  - Add NewsTicker under the credit card on Home.
+
+PHASE 5B  Repayment (latest feature)
+  - Add Repayment model (VirtualRepaymentAccount + RepaymentStatus).
+  - Add RepaymentRepository (OkHttp POST to the payment-webhook Edge Function)
+    and register it in RepositoryProvider.
+  - Add RepaymentModal component; expose showRepaymentModal/repaymentStatus and
+    openRepaymentModal()/dismissRepaymentModal()/submitRepayment() on
+    MainViewModel.
+  - Wire the "Repay Now" button on the debt/summary row of CreditStatementScreen
+    and the SUCCESS toast + auto-dismiss.
+
+PHASE 6  Verify
+  - Compile :app:compileDebugKotlin (fix all errors/warnings you can).
+  - Do NOT assemble APK or smoke test unless the user asks. When asked, build
+    :app:assembleDebug, copy the APK to release/<APPNAME>-release.apk, and
+    confirm the package/version with `aapt2 dump badging` (rule 1.9 / 6.5.1).
+
+PHASE 7  Report
+  - Summarize: files added/changed, the theme token map, feature checklist,
+    the RLS SQL the user must run, and anything left as a decision.
+
+
+================================================================================
+8. DELIVERABLES
+================================================================================
+
+- <NEW_PROJECT_DIR> full Kotlin/Compose project, themed to the decompiled app,
+  with the complete SapaClear/PixKudi feature set.
+- Correct identity (rule 1.9): app name = decompiled brand, applicationId =
+  decompiled package, versionCode/versionName = decompiled version bumped +1.
+- A theme token map (palette hex -> semantic name) documented in the project.
+- Working: login (+OTP auto-gen +app-name gate), dashboard with news ticker,
+  announcement popup (once/hour), session persistence, all feature screens,
+  withdraw/ledger, and the repayment modal + payment-webhook flow.
+- release/<APPNAME>-release.apk committed to the repo (not gitignored).
+- A short README note listing: Supabase URL/key used, the `brand_settings` RLS
+  policy SQL, the payment-webhook URL/events, and the exact build/run commands.
+- A final report: checklist of Section 2 features (done/partial/blocked) and
+  any assumptions made.
+
+
+================================================================================
+9. REUSABILITY — APPLYING THIS BLUEPRINT TO ANY DECOMPILED APK
+================================================================================
+
+To build a DIFFERENT app from another decompiled APK with this same blueprint:
+  1. Set <APPNAME>/<APPNAME_LOWER> to the new brand (this is also the
+     `loan_platform` value the app will accept at login). Take the brand from
+     the decompiled app (rule 1.9), and set applicationId = the decompiled
+     package and version = the decompiled version bumped +1.
+  2. Point <DECOMPILED_DIR> at the new apktool output (Section 3 extraction).
+  3. Point <NEW_PROJECT_DIR> at a fresh folder.
+  4. Keep the SapaClear data layer and the PixKudi functions (Sections 2, 4, 5,
+     including the repayment + payment-webhook flow in 5.5) unchanged — only the
+     THEME, LAYOUTS, app name, package and version change per app.
+  5. Re-run Phases 0-7. The functions are identical for every app; only visuals
+     and identity are swapped to match the source APK.
+
+The end result for every project: the decompiled app's ORIGINAL look and feel,
+powered by the SapaClear/PixKudi functions — no generic template look, no missing
+features.
+
+=== END PROMPT ===
